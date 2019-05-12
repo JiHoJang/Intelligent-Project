@@ -7,7 +7,6 @@
 
 using namespace std;
 
-
 /*
  *  백프로파게이션을 구현 할 때 매트릭스의 크기를 받아와야 한다면
  *  Layer나 weight에서 받아오지 않고 그 안의 Matrix에서 받아오도록 한다
@@ -15,7 +14,7 @@ using namespace std;
 
 // 랜덤값 리턴
 template<typename F>
-F RanValue(int method) {
+F RanValue() {
 	F ans;
 
 	srand(GetTickCount());
@@ -33,9 +32,16 @@ private:
 	M*** mat;
 	int method, row, col, channels;
 	int type;
-
+	int kernel[2], strides[2];
 public:
 	Matrix() {}
+
+	void ks(int _kernel[2], int _strides[2]) {
+		kernel[0] = _kernel[0];
+		kernel[1] = _kernel[1];
+		strides[0] = _strides[0];
+		strides[1] = _strides[1];
+	}
 
 	Matrix(int _method, int _row, int _col, int _channels, int _type) {
 		method = _method;
@@ -52,7 +58,7 @@ public:
 				for (int k = 0; k < row; k++) {
 					mat[j][k] = new (M)(col);
 					for (int l = 0; l < col; l++)
-						mat[j][k][l] = RanValue<M>(method);
+						mat[j][k][l] = RanValue<M>();
 				}
 			}
 		}
@@ -64,6 +70,8 @@ public:
 				mat[j] = new(M*)(row);
 				for (int k = 0; k < row; k++) {
 					mat[j][k] = new (M)(col);
+					for (int l = 0; l < col; l++)
+						mat[j][k][l] = 0;
 				}
 			}
 		}
@@ -101,6 +109,23 @@ T Conv(T** mat1, T** mat2, int r, int c, int maxr, int maxc, int werow, int weco
 	return ret;
 }
 
+// r c 는 시작 위치, maxr, maxc는 mat의 최대 범위
+// kerrow, kercol은 커널의 크기
+template<class T>
+T mp(T** mat, int* idx,int r, int c, int maxr, int maxc, int kerrow, int kercol) {
+	T ret = 0;
+	for (int i = 0; i < kerrow; i++) {
+		for (int j = 0; j < kercol; j++) {
+			if (isrange(r + i, c + i, maxr, maxc) && ret < mat[r + i][c + j]) {
+				
+				ret = mat[r + i][c + j];
+				*idx = maxr * i + j;
+			}
+		}
+	}
+	return ret;
+}
+
 
 // Layer
 // Matrix의 벡터인 이유는 relu, sigmoid 등의 연산을 진행할 때 (같은 layer 안에서)
@@ -113,6 +138,7 @@ private:
 	int row, col, channels;
 	int dim;
 	int strides[2];
+	Matrix<int> poolingidx;
 
 public:
 	// 레이어의 앞 혹은 뒤의 weight와 연결
@@ -189,7 +215,7 @@ public:
 			// 먼저 매트릭스의 구조를 만들고 0으로 초기화
 			// 이때 weight의 nextChannels이 콘볼루션 한 결과의 channels
 			ret = Matrix<L>(conv, row, col, w.nextChannels, conv);
-			memset(ret, 0, sizeof(ret));
+			//memset(ret.mat, 0, sizeof(ret.mat));
 
 			// weight의 nextChannel 만큼 채널을 만들어야 함
 			for (int i = 0; i < w.nextChannels; i++) {
@@ -198,27 +224,29 @@ public:
 				for (int j = 0; j < channels; j++) {
 					// rr과 cc는 패딩을 고려할 때 layer matrix의 연산 시작위치
 					int rr = 0;
+					//int rr = -1 * ((w.row - 1) / 2);
 					for (int r = 0; r < row; r++, rr += strides[0]) {
 						int cc = 0;
+						//int cc = -1 * ((w.col - 1) / 2);
 						for (int c = 0; c < col; c++, cc += strides[1]) {
 							ret[i][r][c] += Conv<L>(mat[mat.size()-1][j], w.mat[i][j], rr, cc, row, col, w.row, w.col);
 							// 이 레이어의 가장 마지막 매트릭스를 이용 (mat.size() - 1)
 							// 먼저 한 채널끼리 콘볼루션을 진행 그리고 다음 채널로 넘어감
 						}
-
 					}
 				}
 			}
 		}
-		// 이는 패딩을 할 때
+		// 패딩을 할 때
+		
 		else {
 			ret = Matrix<L>(conv, row, col, w.nextChannels, conv);
-			memset(ret, 0, sizeof(ret));
+			//memset(ret.mat, 0, sizeof(ret.mat));
 			for (int i = 0; i < w.nextChannels; i++) {
 				for (int j = 0; j < channels; j++) {
-					int rr = (row-1) / 2;
+					int rr = -1*((w.row-1) / 2);
 					for (int r = 0; r < row; r++, rr += strides[0]) {
-						int cc = (col-1) / 2;
+						int cc = -1*((w.col-1) / 2);
 						for (int c = 0; c < col; c++, cc += strides[1]) {
 							ret[i][r][c] += Conv<L>(mat[mat.size() - 1][j], w.mat[i][j], rr, cc, row, col, w.row, w.col);
 						}
@@ -229,6 +257,59 @@ public:
 		}
 
 		return ret;
+	}
+
+	void ReLU() {
+		Matrix<L> temp(relu, row, col, channels, relu);
+		Matrix<L> temp2 = mat[mat.size() - 1];
+		for (int j = 0; j < channels; j++) {
+			for (int r = 0; r < row; r++) {
+				for (int c = 0; c < col; c++) {
+					temp[j][r][c] = max(0, temp2[j][r][c]);
+				}
+
+			}
+		}
+
+		mat.push_back(temp);
+	}
+
+
+	
+	void maxPool(int kernel[2], int strides[2], bool padding) {
+		// 풀링시에는 패딩을 하더라도 1줄씩만 하게 됨
+		if (padding == false) {
+			if ((row - kernel[0]) % strides[0]) {
+				cout << "error in maxpool strides\n";
+				exit(1);
+			}
+			if ((col - kernel[1]) % strides[1]) {
+				cout << "error in maxpool strides\n";
+				exit(1);
+			}
+		}
+
+		// 스트라이드에 따른 계산 결과 매트릭스의 크기
+		row = (row - kernel[0]) / strides[0] + 1;
+		col = (col - kernel[1]) / strides[1] + 1;
+
+		// 풀링시에 뽑는 인덱스를 저장
+		poolingidx = Matrix<int>(maxPoolIdx, row, col, channels, maxPoolIdx);
+		Matrix<L> pool(maxPooling, row, col, channels, maxPooling);
+
+		poolingidx.ks(kernel, strides);
+
+		for (int i = 0; i < channels; i++) {
+			int rr = 0;
+			for (int r = 0; r < row; r++, rr += strides[0]) {
+				int cc = 0;
+				for (int c = 0; c < col; c++, cc += strides[1] ) {
+					pool[i][r][c] = mp<L>(pool[i], &poolingidx[i][r][c], rr, cc, row, col, kernel[0], kernel[1]);
+				}
+			}
+		}
+
+		mat.push_back(pool);
 	}
 };
 
