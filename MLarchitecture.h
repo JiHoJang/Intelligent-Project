@@ -8,6 +8,9 @@ class Weight;
 template<class M>
 class Matrix;
 
+template <class L>
+class Layer;
+
 enum datatype {
 	int32,
 	int64,
