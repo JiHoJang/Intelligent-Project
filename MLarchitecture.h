@@ -25,7 +25,9 @@ enum datatype {
 	conv,
 	weight,
 	maxPooling,
-	maxPoolIdx
+	maxPoolIdx,
+	reshape,
+	matmul
 };
 
 #endif

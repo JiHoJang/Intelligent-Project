@@ -126,7 +126,6 @@ T mp(T** mat, int* idx,int r, int c, int maxr, int maxc, int kerrow, int kercol)
 	return ret;
 }
 
-
 // Layer
 // Matrix의 벡터인 이유는 relu, sigmoid 등의 연산을 진행할 때 (같은 layer 안에서)
 // 그 결과를 벡터의 마지막에 집어 넣어서
@@ -259,6 +258,7 @@ public:
 		return ret;
 	}
 
+
 	void ReLU() {
 		Matrix<L> temp(relu, row, col, channels, relu);
 		Matrix<L> temp2 = mat[mat.size() - 1];
@@ -311,6 +311,81 @@ public:
 
 		mat.push_back(pool);
 	}
+
+
+	// 마지막 계산된 layer의 매트릭스를
+	// 채널 1개의 row와 col으로 이뤄진 매트릭스로 변환
+	void Reshape(int rc[2]) {
+		Matrix<L> temp = mat[mat.size() - 1];
+
+		Matrix<L> temp2(reshape, rc[0], rc[1], reshape);
+
+		row = rc[0];
+		col = rc[1];
+
+		int r = 0;
+		int c = 0;
+
+		for (int ch = 0; ch < temp.channels; ch++) {
+			for (int i = 0; i < temp.row; i++) {
+				for (int j = 0; j < temp.col; j++) {
+					temp2.mat[0][r][c++] = temp.mat[ch][i][j];
+					if (c == rc[1]) {
+						if (r == rc[0])
+						{
+							cout << "error in reshape";
+							exit(1);
+						}
+						r++;
+						c = 0;
+						
+					}
+				}
+			}
+		}
+
+		mat.push_back(temp2);
+	}
+
+
+	// 매트릭스 간의 곱
+	template<class W>
+	Matrix<L> Matmul(W w) {
+		Matrix<L> temp = mat[mat.size() - 1];
+
+		if (w.nextChannels != 1) {
+			cout << "Error in matmul (nextChannels)";
+			exit(1);
+		}
+		else if (w.channels != temp.channels) {
+			cout << "Error in matmul (channels)";
+			exit(1);
+		}
+		else if (col != w.row) {
+			cout << "Error in matmul (size of matrix)";
+			exit(1);
+		}
+
+		Matrix<L> ret(matmul, row, w.col, channels, matmul);
+
+		for (int ch = 0; ch < channels; ch++) {
+			for (int i = 0; i < row; i++) {
+				for (int j = 0; j < w.col; j++) {
+					int t = 0;
+
+					for (int k = 0; k < w.col; k++) {
+						t += temp[ch][i][k] * w.mat[0][ch][k][i];
+					}
+
+					ret[ch][i][j] = t;
+
+				}
+			}
+		}
+
+		return ret;
+	}
+
 };
 
 template<class W>
@@ -319,15 +394,41 @@ private:
 	vector<Matrix<W> > mat; // for next channels
 	int row, col, channels;
 	int nextChannels;
+	int dim;
 public:
 	Layer<W>* prev = NULL;
 	Layer<W>* next = NULL;
 
-	Weight(int method, int kernel[4]) {
-		row = kernel[0];
-		col = kernel[1];
-		channels = kernel[2];
-		nextChannels = kernel[3];
+	Weight(int method, int kernel[]) {
+		dim = sizeof(kernel) / 4;
+		if (dim == 1) {
+			row = kernel[0];
+			col = 1;
+			channels = 1;
+			nextChannels = 1;
+		}
+		else if (dim == 2) {
+			row = kernel[0];
+			col = kernel[1];
+			channels = 1;
+			nextChannels = 1;
+		}
+		else if (dim == 3) {
+			row = kernel[0];
+			col = kernel[1];
+			channels = kernel[2];
+			nextChannels = 1;
+		}
+		else if (dim == 4) {
+			row = kernel[0];
+			col = kernel[1];
+			channels = kernel[2];
+			nextChannels = kernel[4];
+		}
+		else {
+			cout << "error in placeholder\n";
+			exit(1);
+		}
 
 		for (int i = 0; i < nextChannels; i++) {
 			Matrix<W> temp(method, row, col, channels, weight);
