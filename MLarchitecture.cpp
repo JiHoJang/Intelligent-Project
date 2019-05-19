@@ -1,9 +1,11 @@
 #include <iostream>
 #include <vector>
 #include <memory>
-#include <stdlib.h>
-#include <Windows.h>
+#include <ctime>
 #include "MLarchitecture.h"
+
+#define max(x, y) x > y ? x : y
+
 
 using namespace std;
 
@@ -17,7 +19,7 @@ template<class M>
 M RanValue() {
 	M ans;
 
-	srand(GetTickCount64());
+	//srand((unsigned int)time(0));
 
 	ans = rand() / (M)RAND_MAX + 0.01;
 
@@ -26,34 +28,35 @@ M RanValue() {
 
 template<class M>
 Matrix<M>::Matrix(int _method, int _row, int _col, int _channels, int _type) {
-	this->method = _method;
-	this->row = _row;
-	this->col = _col;
-	this->channels = _channels;
-	this->type = _type;
+	method = _method;
+	row = _row;
+	col = _col;
+	channels = _channels;
+	type = _type;
 
 	// random일 경우 난수로 초기화
 	if (method == random) {
-		this->mat = new M**[channels]();
+		srand((unsigned int)time(0));
+		mat = new M**[channels];
 		for (int j = 0; j < channels; j++) {
-			this->mat[j] = new M*[row]();
+			mat[j] = new M*[row];
 			for (int k = 0; k < row; k++) {
-				this->mat[j][k] = new M[col]();
+				mat[j][k] = new M[col];
 				for (int l = 0; l < col; l++)
-					this->mat[j][k][l] = RanValue<M>();
+					mat[j][k][l] = RanValue<M>();
 			}
 		}
 	}
 
 	// random이 아닌 경우 매트릭스 구조만 생성
 	else {
-		this->mat = new M**[channels]();
+		mat = new M**[channels];
 		for (int j = 0; j < channels; j++) {
-			this->mat[j] = new M*[row]();
+			mat[j] = new M*[row];
 			for (int k = 0; k < row; k++) {
-				this->mat[j][k] = new M[col]();
+				mat[j][k] = new M[col];
 				for (int l = 0; l < col; l++)
-					this->mat[j][k][l] = 0;
+					mat[j][k][l] = 0;
 			}
 		}
 	}
@@ -61,14 +64,14 @@ Matrix<M>::Matrix(int _method, int _row, int _col, int _channels, int _type) {
 
 template<class M>
 void Matrix<M> :: ks(int _kernel[2], int _strides[2]) {
-	this->kernel[0] = _kernel[0];
-	this->kernel[1] = _kernel[1];
-	this->strides[0] = _strides[0];
-	this->strides[1] = _strides[1];
+	kernel[0] = _kernel[0];
+	kernel[1] = _kernel[1];
+	strides[0] = _strides[0];
+	strides[1] = _strides[1];
 }
 
 template<class M>
-Matrix<M>::~Matrix() {
+void Matrix<M>::deleteMatrix() {
 	for (int j = 0; j < channels; j++) {
 		for (int k = 0; k < row; k++) {
 			delete[] mat[j][k];
@@ -76,6 +79,19 @@ Matrix<M>::~Matrix() {
 		delete[] mat[j];
 	}
 	delete[] mat;
+}
+
+template<class M>
+ void printmat(Matrix<M> mat) {
+	 for (int ch = 0; ch < mat.channels; ch++) {
+		 cout << "channel" << ch + 1 << '\n';
+		 for (int i = 0; i < mat.row; i++) {
+			 for (int j = 0; j < mat.col; j++) {
+				 cout << mat[ch][i][j] << ' ';
+			 }
+			 cout << '\n';
+		 }
+	 }
 }
 
 // 패딩을 매트릭스를 확장시키지 않고 원래 행렬을 벗어난 범위는 0으로 처리
@@ -89,7 +105,7 @@ Data Conv(Data** mat1, Data** mat2, int r, int c, int maxr, int maxc, int werow,
 	Data ret = 0;
 	for (int i = 0; i < werow; i++) {
 		for (int j = 0; j < wecol; j++) {
-			if (isrange(r + i, c + i, maxr, maxc))
+			if (isrange(r + i, c + j, maxr, maxc))
 				ret += mat1[r + i][c + j] * mat2[i][j];
 		}
 	}
@@ -102,7 +118,7 @@ Data mp(Data** mat, int* idx,int r, int c, int maxr, int maxc, int kerrow, int k
 	Data ret = 0;
 	for (int i = 0; i < kerrow; i++) {
 		for (int j = 0; j < kercol; j++) {
-			if (isrange(r + i, c + i, maxr, maxc) && ret < mat[r + i][c + j]) {
+			if (isrange(r + i, c + j, maxr, maxc) && ret < mat[r + i][c + j]) {
 				
 				ret = mat[r + i][c + j];
 				*idx = maxr * i + j;
@@ -112,8 +128,17 @@ Data mp(Data** mat, int* idx,int r, int c, int maxr, int maxc, int kerrow, int k
 	return ret;
 }
 
+Layer::Layer()
+{
+	row = 0;
+	col = 0;
+	channels = 0;
+}
+
 Layer::Layer(int method, int dimention[], int type, int len) {
 	dim = len;
+	strides[0] = 0;
+	strides[1] = 0;
 	if (dim == 1) {
 		row = dimention[0];
 		col = 1;
@@ -136,20 +161,13 @@ Layer::Layer(int method, int dimention[], int type, int len) {
 
 	// 콘볼루션의 결과 일때는 레이어를 생성한 뒤
 	// 벡터에만 넣어주고 콘볼루션의 리턴을 할당
-	if (method == conv) {
-		Matrix<Data> temp;
-		this->matrix.push_back(temp);
-	}
-
-	else {
-		Matrix<Data> temp(method, row, col, channels, type);
-	}
-
+	Matrix<Data> temp(method, row, col, channels, type);
+	matrix.push_back(temp);
 }
 
 Layer::~Layer() {
 	for (auto it = this->matrix.begin(); it != this->matrix.end(); it++) {
-		it->~Matrix();
+		it->deleteMatrix();
 	}
 	this->matrix.clear();
 }
@@ -159,8 +177,6 @@ Layer::~Layer() {
 Matrix<Data> Layer::conv2d(Weight w, int stride[2], bool padding) {
 	strides[0] = stride[0];
 	strides[1] = stride[1];
-
-	Matrix<Data> ret;
 
 	// 패딩을 하지 않는 경우
 	if (padding == false) {
@@ -174,12 +190,13 @@ Matrix<Data> Layer::conv2d(Weight w, int stride[2], bool padding) {
 		}
 
 		// 스트라이드에 따른 계산 결과 매트릭스의 크기
-		this->row = (row - w.row) / this->strides[0] + 1;
-		this->col = (col - w.col) / this->strides[1] + 1;
+		row = (row - w.row) / this->strides[0] + 1;
+		col = (col - w.col) / this->strides[1] + 1;
+		
 
 		// 먼저 매트릭스의 구조를 만들고 0으로 초기화
 		// 이때 weight의 nextChannels이 콘볼루션 한 결과의 channels
-		ret = Matrix<Data> (conv, row, col, w.nextChannels, conv);
+		Matrix<Data> ret(conv, row, col, w.nextChannels, conv);
 		//memset(ret.mat, 0, sizeof(ret.mat));
 
 		// weight의 nextChannel 만큼 채널을 만들어야 함
@@ -201,11 +218,12 @@ Matrix<Data> Layer::conv2d(Weight w, int stride[2], bool padding) {
 				}
 			}
 		}
+		return ret;
 	}
 	// 패딩을 할 때
 
 	else {
-		ret = Matrix<Data> (conv, row, col, w.nextChannels, conv);
+		Matrix<Data> ret(conv, row, col, w.nextChannels, conv);
 		//memset(ret.mat, 0, sizeof(ret.mat));
 		for (int i = 0; i < w.nextChannels; i++) {
 			for (int j = 0; j < channels; j++) {
@@ -219,9 +237,8 @@ Matrix<Data> Layer::conv2d(Weight w, int stride[2], bool padding) {
 				}
 			}
 		}
+		return ret;
 	}
-
-	return ret;
 }
 
 void Layer::ReLU() {
@@ -241,12 +258,18 @@ void Layer::ReLU() {
 
 void Layer::maxPool(int kernel[2], int strides[2], bool padding) {
 	// 풀링시에는 패딩을 하더라도 1줄씩만 하게 됨
-	if (padding == false) {
-		if ((row - kernel[0]) % strides[0]) {
+	if ((row - kernel[0]) % strides[0]) {
+		if (padding == true)
+			row += strides[0] - (row - kernel[0]) % strides[0];
+		else {
 			cout << "error in maxpool strides\n";
 			exit(1);
 		}
-		if ((col - kernel[1]) % strides[1]) {
+	}
+	if ((col - kernel[1]) % strides[1]) {
+		if (padding == true)
+			col += strides[1] - (col - kernel[1]) % strides[1];
+		else {
 			cout << "error in maxpool strides\n";
 			exit(1);
 		}
@@ -255,7 +278,7 @@ void Layer::maxPool(int kernel[2], int strides[2], bool padding) {
 	// 스트라이드에 따른 계산 결과 매트릭스의 크기
 	row = (row - kernel[0]) / strides[0] + 1;
 	col = (col - kernel[1]) / strides[1] + 1;
-
+	channels = matrix[matrix.size() - 1].channels;
 	// 풀링시에 뽑는 인덱스를 저장
 	poolingidx = Matrix<int>(maxPoolIdx, row, col, channels, maxPoolIdx);
 	Matrix<Data> pool(maxPooling, row, col, channels, maxPooling);
@@ -267,7 +290,7 @@ void Layer::maxPool(int kernel[2], int strides[2], bool padding) {
 		for (int r = 0; r < row; r++, rr += strides[0]) {
 			int cc = 0;
 			for (int c = 0; c < col; c++, cc += strides[1]) {
-				pool.mat[i][r][c] = mp(pool.mat[i], &poolingidx.mat[i][r][c], rr, cc, row, col, kernel[0], kernel[1]);
+				pool.mat[i][r][c] = mp(matrix[matrix.size()-1].mat[i], &poolingidx.mat[i][r][c], rr, cc, matrix[matrix.size() - 1].row , matrix[matrix.size() - 1].col, kernel[0], kernel[1]);
 			}
 		}
 	}
@@ -309,8 +332,8 @@ void Layer::Reshape(int rc[2]) {
 	matrix.push_back(temp2);
 }
 
-template <class W>
-Matrix<Data> Layer::Matmul(W w) {
+
+Matrix<Data> Layer::Matmul(Weight w) {
 	Matrix<Data> temp = matrix[matrix.size() - 1];
 
 	if (w.nextChannels != 1) {
@@ -326,7 +349,7 @@ Matrix<Data> Layer::Matmul(W w) {
 		exit(1);
 	}
 
-	Matrix<Data> ret(matmul, row, w.col, channels, matmul);
+	Matrix<Data> ret(matmul, row, w.col, w.nextChannels, matmul);
 
 	for (int ch = 0; ch < channels; ch++) {
 		for (int i = 0; i < row; i++) {
@@ -334,10 +357,10 @@ Matrix<Data> Layer::Matmul(W w) {
 				int t = 0;
 
 				for (int k = 0; k < w.col; k++) {
-					t += temp[ch][i][k] * w.mat[0][ch][k][i];
+					t += temp.mat[ch][i][k] * w.matrix[0].mat[ch][k][i];
 				}
 
-				ret[ch][i][j] = t;
+				ret.mat[ch][i][j] = t;
 
 			}
 		}
@@ -370,7 +393,7 @@ Weight::Weight(int method, int kernel[], int len) {
 		row = kernel[0];
 		col = kernel[1];
 		channels = kernel[2];
-		nextChannels = kernel[4];
+		nextChannels = kernel[3];
 	}
 	else {
 		cout << "error in placeholder\n";
@@ -385,7 +408,7 @@ Weight::Weight(int method, int kernel[], int len) {
 
 Weight::~Weight() {
 	for (auto it = this->matrix.begin(); it != this->matrix.end(); it++) {
-		it->~Matrix();
+		it->deleteMatrix();
 	}
 	this->matrix.clear();
 }

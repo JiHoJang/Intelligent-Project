@@ -4,6 +4,25 @@
 
 using namespace std;
 
+enum datatype {
+	int32,
+	int64,
+	float32,
+	float64,
+	read,
+	random,
+	result,
+	input,
+	relu,
+	sigmoid,
+	conv,
+	weight,
+	maxPooling,
+	maxPoolIdx,
+	reshape,
+	matmul,
+};
+
 typedef float Data;
 
 class Weight;
@@ -15,7 +34,8 @@ class Matrix {
 public:
 	int method, row, col, channels;
 	int type;
-	int kernel[2], strides[2];
+	int kernel[2];
+	int	strides[2];
 
 	M*** mat;
 	Matrix() {
@@ -29,9 +49,12 @@ public:
 
 	void ks(int _kernel[2], int _strides[2]);
 
-
-	~Matrix();
+	void deleteMatrix();
+	//~Matrix();
 };
+
+template<class M>
+void printmat(Matrix<M> mat);
 
 // Layer
 // Matrix의 벡터인 이유는 relu, sigmoid 등의 연산을 진행할 때 (같은 layer 안에서)
@@ -42,18 +65,14 @@ public:
 	vector<Matrix<Data> > matrix; // for calculate functions
 	int row, col, channels;
 	int dim;
-	int strides[2];
+	int strides[2] = { 0 };
 	Matrix<int> poolingidx;
 
 	// 레이어의 앞 혹은 뒤의 weight와 연결
 	Weight* prev = NULL;
 	Weight* next = NULL;
 
-	Layer() {
-		row = 0;
-		col = 0;
-		channels = 0;
-	}
+	Layer();
 
 	Layer(int method, int dimention[], int type, int len);
 
@@ -69,8 +88,7 @@ public:
 
 
 	// 매트릭스 간의 곱
-	template<class W>
-	Matrix<Data> Matmul(W w);
+	Matrix<Data> Matmul(Weight w);
 
 };
 
@@ -96,22 +114,4 @@ public:
 	~Weight();
 };
 
-enum datatype {
-	int32,
-	int64,
-	float32,
-	float64,
-	read,
-	random,
-	result,
-	input,
-	relu,
-	sigmoid,
-	conv,
-	weight,
-	maxPooling,
-	maxPoolIdx,
-	reshape,
-	matmul,
-};
 #endif
