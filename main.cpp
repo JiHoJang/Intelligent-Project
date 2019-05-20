@@ -1,9 +1,11 @@
 #include <iostream>
+#include <ctime>
 #include "MLarchitecture.h"
 
 using namespace std;
 
 int main() {
+	srand((unsigned int)time(0));
 	int inp[3] = { 5, 5, 3 };
 	int np[] = { 3, 3, 3, 5 };
 	int stride[2] = { 1, 1 };
@@ -21,7 +23,21 @@ int main() {
 		}
 	}
 
-	cout << '\n';
+	cout << "\nWeight\n";
+	for (int nch = 0; nch < W.nextChannels; nch++) {
+		cout << "nextChannel" << nch + 1 << '\n';
+		for (int ch = 0; ch < W.matrix[nch].channels; ch++) {
+			cout << "channel" << ch + 1 << '\n';
+			for (int i = 0; i < W.matrix[nch].row; i++) {
+				for (int j = 0; j < W.matrix[nch].col; j++) {
+					cout << W.matrix[nch].mat[ch][i][j] << ' ';
+				}
+				cout << '\n';
+			}
+		}
+	}
+
+	cout << "\nConv\n";
 	Layer X2(conv, inp, conv, 3);
 	X2.matrix.push_back(X.conv2d(W, stride, true));
 

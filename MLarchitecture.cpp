@@ -1,7 +1,6 @@
 #include <iostream>
 #include <vector>
 #include <memory>
-#include <ctime>
 #include "MLarchitecture.h"
 
 #define max(x, y) x > y ? x : y
@@ -36,7 +35,6 @@ Matrix<M>::Matrix(int _method, int _row, int _col, int _channels, int _type) {
 
 	// random일 경우 난수로 초기화
 	if (method == random) {
-		srand((unsigned int)time(0));
 		mat = new M**[channels];
 		for (int j = 0; j < channels; j++) {
 			mat[j] = new M*[row];
