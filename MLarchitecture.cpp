@@ -344,20 +344,20 @@ Matrix<Data> Layer::Matmul(Weight w) {
 		cout << "Error in matmul (channels)";
 		exit(1);
 	}
-	else if (col != w.row) {
+	else if (temp.col != w.row) {
 		cout << "Error in matmul (size of matrix)";
 		exit(1);
 	}
 
-	Matrix<Data> ret(matmul, row, w.col, w.nextChannels, matmul);
+	Matrix<Data> ret(matmul, temp.row, w.col, w.nextChannels, matmul);
 
-	for (int ch = 0; ch < channels; ch++) {
-		for (int i = 0; i < row; i++) {
+	for (int ch = 0; ch < temp.channels; ch++) {
+		for (int i = 0; i < temp.row; i++) {
 			for (int j = 0; j < w.col; j++) {
-				int t = 0;
+				Data t = 0;
 
 				for (int k = 0; k < w.col; k++) {
-					t += temp.mat[ch][i][k] * w.matrix[0].mat[ch][k][i];
+					t += temp.mat[ch][i][k] * w.matrix[0].mat[ch][k][j];
 				}
 
 				ret.mat[ch][i][j] = t;
@@ -367,6 +367,35 @@ Matrix<Data> Layer::Matmul(Weight w) {
 	}
 
 	return ret;
+}
+
+void Layer::SoftMax() {
+	row = matrix[matrix.size() - 1].row;
+	col = matrix[matrix.size() - 1].col;
+	channels = matrix[matrix.size() - 1].channels;
+
+	int num = row*col*channels;
+	Data sum = 0.0;
+
+	for (int ch = 0; ch < channels; ch++) {
+		for (int i = 0; i < row; i++) {
+			for (int j = 0; j < col; j++) {
+				sum += matrix[matrix.size() - 1].mat[ch][i][j];
+			}
+		}
+	}
+
+	Matrix<Data> temp(softmax, row, col, channels, softmax);
+
+	for (int ch = 0; ch < channels; ch++) {
+		for (int i = 0; i < row; i++) {
+			for (int j = 0; j < col; j++) {
+				temp.mat[ch][i][j] = matrix[matrix.size() - 1].mat[ch][i][j] / sum;
+			}
+		}
+	}
+
+	matrix.push_back(temp);
 }
 
 Weight::Weight(int method, int kernel[], int len) {

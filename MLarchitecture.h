@@ -21,6 +21,7 @@ enum datatype {
 	maxPoolIdx,
 	reshape,
 	matmul,
+	softmax,
 };
 
 typedef float Data;
@@ -89,6 +90,8 @@ public:
 
 	// 매트릭스 간의 곱
 	Matrix<Data> Matmul(Weight w);
+
+	void SoftMax();
 
 };
 

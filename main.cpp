@@ -86,5 +86,19 @@ int main() {
 		}
 	}
 
+
+	cout << "\n Softmax \n";
+
+	model.SoftMax();
+
+	for (int ch = 0; ch < model.matrix[1].channels; ch++) {
+		cout << "channel" << ch + 1 << '\n';
+		for (int i = 0; i < model.matrix[1].row; i++) {
+			for (int j = 0; j < model.matrix[1].col; j++) {
+				cout << model.matrix[1].mat[ch][i][j] << ' ';
+			}
+			cout << '\n';
+		}
+	}
 	system("pause");
 }
