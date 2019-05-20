@@ -161,8 +161,14 @@ Layer::Layer(int method, int dimention[], int type, int len) {
 
 	// 콘볼루션의 결과 일때는 레이어를 생성한 뒤
 	// 벡터에만 넣어주고 콘볼루션의 리턴을 할당
-	Matrix<Data> temp(method, row, col, channels, type);
-	matrix.push_back(temp);
+	if (method == conv || method == matmul) {
+		//Matrix<Data> temp;
+		//matrix.push_back(temp);
+	}
+	else {
+		Matrix<Data> temp(method, row, col, channels, type);
+		matrix.push_back(temp);
+	}
 }
 
 Layer::~Layer() {

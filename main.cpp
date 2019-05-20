@@ -23,7 +23,7 @@ int main() {
 
 	cout << '\n';
 	Layer X2(conv, inp, conv, 3);
-	X2.matrix[0] = X.conv2d(W, stride, true);
+	X2.matrix.push_back(X.conv2d(W, stride, true));
 
 	for (int ch = 0; ch < X2.matrix[0].channels; ch++) {
 		cout << "channel" << ch + 1 << '\n';
@@ -72,7 +72,7 @@ int main() {
 
 	int m[2] = { 1, 10 };
 	Layer model(matmul, m, matmul, 2);
-	model.matrix[0] = X2.Matmul(W2);
+	model.matrix.push_back(X2.Matmul(W2));
 
 	cout << "\n Matmul \n";
 
