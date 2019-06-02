@@ -22,6 +22,7 @@ enum datatype {
 	reshape,
 	matmul,
 	softmax,
+	add
 };
 
 typedef float Data;
@@ -91,8 +92,11 @@ public:
 	// 매트릭스 간의 곱
 	Matrix<Data> Matmul(Weight w);
 
+	Matrix<Data> Add(Weight w);
+
 	void SoftMax();
 
+	Data LError(Matrix<Data> result);
 };
 
 class Weight {

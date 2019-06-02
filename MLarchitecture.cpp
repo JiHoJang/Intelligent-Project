@@ -1,6 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <memory>
+#include <cmath>
 #include "MLarchitecture.h"
 
 #define max(x, y) x > y ? x : y
@@ -176,6 +177,7 @@ Layer::~Layer() {
 	this->matrix.clear();
 }
 
+
 // 콘볼루션 할 수 있는 함수
 	// 스트라이드는 0번째가 아래로, 1번째가 오른쪽으로
 Matrix<Data> Layer::conv2d(Weight w, int stride[2], bool padding) {
@@ -205,7 +207,6 @@ Matrix<Data> Layer::conv2d(Weight w, int stride[2], bool padding) {
 
 		// weight의 nextChannel 만큼 채널을 만들어야 함
 		for (int i = 0; i < w.nextChannels; i++) {
-
 			// 현재 채널 끼리도 계산 해야함
 			for (int j = 0; j < channels; j++) {
 				// rr과 cc는 패딩을 고려할 때 layer matrix의 연산 시작위치
@@ -237,7 +238,6 @@ Matrix<Data> Layer::conv2d(Weight w, int stride[2], bool padding) {
 					for (int c = 0; c < col; c++, cc += strides[1]) {
 						ret.mat[i][r][c] += Conv(matrix[matrix.size() - 1].mat[j], w.matrix[i].mat[j], rr, cc, row, col, w.row, w.col);
 					}
-
 				}
 			}
 		}
@@ -373,6 +373,42 @@ Matrix<Data> Layer::Matmul(Weight w) {
 	return ret;
 }
 
+
+Matrix<Data> Layer::Matmul(Weight w) {
+	Matrix<Data> temp = matrix[matrix.size() - 1];
+
+	if (w.nextChannels != 1) {
+		cout << "Error in matmul (nextChannels)";
+		exit(1);
+	}
+	else if (w.channels != temp.channels) {
+		cout << "Error in matmul (channels)";
+		exit(1);
+	}
+	else if (temp.row != w.row) {
+		cout << "Error in matmul (size of matrix)";
+		exit(1);
+	}
+	else if (temp.col != w.col) {
+		cout << "Error in matmul (size of matrix)";
+		exit(1);
+	}
+
+	Matrix<Data> ret(add, temp.row, w.col, w.nextChannels, add);
+
+	for (int ch = 0; ch < temp.channels; ch++) {
+		for (int i = 0; i < temp.row; i++) {
+			for (int j = 0; j < temp.col; j++) {
+
+				ret.mat[ch][i][j] = temp.mat[ch][i][j] + w.matrix[0].mat[ch][i][j];
+
+			}
+		}
+	}
+
+	return ret;
+}
+
 void Layer::SoftMax() {
 	row = matrix[matrix.size() - 1].row;
 	col = matrix[matrix.size() - 1].col;
@@ -401,6 +437,36 @@ void Layer::SoftMax() {
 
 	matrix.push_back(temp);
 }
+
+Data MinMax(Data num, Data low, Data high) {
+	if (num > high) return high;
+	else if (num < low) return low;
+	return num;
+}
+
+Data Layer::LError(Matrix<Data> label) {
+	int row = matrix[matrix.size() - 1].row;
+	int col = matrix[matrix.size() - 1].col;
+	int channels = matrix[matrix.size() - 1].channels;
+
+	if (label.row != row || label.col != col || label.channels != channels) {
+		printf("error in cost \n");
+		exit(1);
+	}
+
+	Data answer = 0;
+
+	//Matrix<Data> temp(-1, row, col, channels, -1);
+	Matrix<Data> temp = matrix[matrix.size() - 1];
+
+	for (int ch = 0; ch < channels; ch++)
+		for (int r = 0; r < row; r++)
+			for (int c = 0; c < col; c++)
+				answer += label.mat[ch][r][c] * log(MinMax(temp.mat[ch][r][c], 0.0000000001, 1));
+	
+	return answer;
+}
+
 
 Weight::Weight(int method, int kernel[], int len) {
 	dim = len;

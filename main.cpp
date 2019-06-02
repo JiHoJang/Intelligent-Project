@@ -10,6 +10,12 @@ int main() {
 	int np[] = { 3, 3, 3, 5 };
 	int stride[2] = { 1, 1 };
 
+	int input_size = 0;
+	int batch_size = 0;
+	int total_batch_size = input_size / batch_size;
+
+	vector<Layer> inputLayer;
+
 	Weight W(random, np, 4);
 	Layer X(random, inp, input, 3);
 
@@ -116,5 +122,12 @@ int main() {
 			cout << '\n';
 		}
 	}
+
+	//session
+	for (int i = 0; i < total_batch_size; i++) {
+
+	}
+
 	system("pause");
+
 }
