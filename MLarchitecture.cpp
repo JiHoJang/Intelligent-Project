@@ -14,7 +14,7 @@ using namespace std;
  *  Layer나 weight에서 받아오지 않고 그 안의 Matrix에서 받아오도록 한다
  */
 
-// 랜덤값 리턴
+ // 랜덤값 리턴
 template<class M>
 M RanValue() {
 	M ans;
@@ -23,9 +23,8 @@ M RanValue() {
 
 	ans = rand() / (M)RAND_MAX - 0.5;
 
-	ans *= 2;
 
-	return ans == 0 ? 0.01 : ans;
+	return ans*0.5;
 }
 
 template<class M>
@@ -42,9 +41,9 @@ Matrix<M>::Matrix(int _method, int _row, int _col, int _channels, int _type) {
 
 	// random일 경우 난수로 초기화
 	if (method == random) {
-		mat = new M**[channels];
+		mat = new M * *[channels];
 		for (int j = 0; j < channels; j++) {
-			mat[j] = new M*[row];
+			mat[j] = new M * [row];
 			for (int k = 0; k < row; k++) {
 				mat[j][k] = new M[col];
 				for (int l = 0; l < col; l++)
@@ -65,9 +64,9 @@ Matrix<M>::Matrix(int _method, int _row, int _col, int _channels, int _type) {
 	}
 	// random이 아닌 경우 매트릭스 구조만 생성
 	else {
-		mat = new M**[channels];
+		mat = new M * *[channels];
 		for (int j = 0; j < channels; j++) {
-			mat[j] = new M*[row];
+			mat[j] = new M * [row];
 			for (int k = 0; k < row; k++) {
 				mat[j][k] = new M[col];
 				for (int l = 0; l < col; l++)
@@ -78,7 +77,7 @@ Matrix<M>::Matrix(int _method, int _row, int _col, int _channels, int _type) {
 }
 
 template<class M>
-void Matrix<M> :: ks(int _kernel[2], int _strides[2]) {
+void Matrix<M> ::ks(int _kernel[2], int _strides[2]) {
 	kernel[0] = _kernel[0];
 	kernel[1] = _kernel[1];
 	strides[0] = _strides[0];
@@ -97,16 +96,16 @@ void Matrix<M>::deleteMatrix() {
 }
 
 template<class M>
- void printmat(Matrix<M> mat) {
-	 for (int ch = 0; ch < mat.channels; ch++) {
-		 cout << "channel" << ch + 1 << '\n';
-		 for (int i = 0; i < mat.row; i++) {
-			 for (int j = 0; j < mat.col; j++) {
-				 cout << mat[ch][i][j] << ' ';
-			 }
-			 cout << '\n';
-		 }
-	 }
+void printmat(Matrix<M> mat) {
+	for (int ch = 0; ch < mat.channels; ch++) {
+		cout << "channel" << ch + 1 << '\n';
+		for (int i = 0; i < mat.row; i++) {
+			for (int j = 0; j < mat.col; j++) {
+				cout << mat[ch][i][j] << ' ';
+			}
+			cout << '\n';
+		}
+	}
 }
 
 // 패딩을 매트릭스를 확장시키지 않고 원래 행렬을 벗어난 범위는 0으로 처리
@@ -116,7 +115,7 @@ bool isrange(int row, int col, int maxr, int maxc) {
 
 
 // 2차원 행렬 두개를 받아서 콘볼루션 값 리턴
-Data Conv(Data** mat1, Data** mat2, int r, int c, int maxr, int maxc, int werow, int wecol) {
+Data Conv(Data * *mat1, Data * *mat2, int r, int c, int maxr, int maxc, int werow, int wecol) {
 	Data ret = 0;
 	for (int i = 0; i < werow; i++) {
 		for (int j = 0; j < wecol; j++) {
@@ -129,13 +128,13 @@ Data Conv(Data** mat1, Data** mat2, int r, int c, int maxr, int maxc, int werow,
 
 // r c 는 시작 위치, maxr, maxc는 mat의 최대 범위
 // kerrow, kercol은 커널의 크기
-Data mp(Data** mat, int* idx,int r, int c, int maxr, int maxc, int kerrow, int kercol) {
+Data mp(Data * *mat, int* idx, int r, int c, int maxr, int maxc, int kerrow, int kercol) {
 	Data ret = 0;
 	for (int i = 0; i < kerrow; i++) {
 		for (int j = 0; j < kercol; j++) {
 			if (isrange(r + i, c + j, maxr, maxc) && ret < mat[r + i][c + j]) {
 				ret = mat[r + i][c + j];
-				*idx = maxc * (r+i) + c+j;
+				*idx = maxc * (r + i) + c + j;
 			}
 		}
 	}
@@ -206,7 +205,7 @@ Matrix<Data> Layer::conv2d(Weight w, int stride[2], bool padding) {
 		// 스트라이드에 따른 계산 결과 매트릭스의 크기
 		row = (row - w.row) / this->strides[0] + 1;
 		col = (col - w.col) / this->strides[1] + 1;
-		
+
 
 		// 먼저 매트릭스의 구조를 만들고 0으로 초기화
 		// 이때 weight의 nextChannels이 콘볼루션 한 결과의 channels
@@ -302,7 +301,7 @@ void Layer::maxPool(int kernel[2], int strides[2], bool padding) {
 		for (int r = 0; r < row; r++, rr += strides[0]) {
 			int cc = 0;
 			for (int c = 0; c < col; c++, cc += strides[1]) {
-				pool.mat[i][r][c] = mp(matrix[matrix.size()-1].mat[i], &poolingidx.mat[i][r][c], rr, cc, matrix[matrix.size() - 1].row , matrix[matrix.size() - 1].col, kernel[0], kernel[1]);
+				pool.mat[i][r][c] = mp(matrix[matrix.size() - 1].mat[i], &poolingidx.mat[i][r][c], rr, cc, matrix[matrix.size() - 1].row, matrix[matrix.size() - 1].col, kernel[0], kernel[1]);
 			}
 		}
 	}
@@ -315,7 +314,7 @@ void Layer::maxPool(int kernel[2], int strides[2], bool padding) {
 void Layer::Reshape(int rc[2]) {
 	Matrix<Data> temp = matrix[matrix.size() - 1];
 
-	Matrix<Data> temp2(reshape, rc[0], rc[1], 1,reshape);
+	Matrix<Data> temp2(reshape, rc[0], rc[1], 1, reshape);
 
 	row = rc[0];
 	col = rc[1];
@@ -422,8 +421,8 @@ void Layer::SoftMax() {
 	col = matrix[matrix.size() - 1].col;
 	channels = matrix[matrix.size() - 1].channels;
 
-	int num = row*col*channels;
-	Data sum = 0.0;
+	int num = row * col * channels;
+	double sum = 0.0;
 
 	for (int ch = 0; ch < channels; ch++) {
 		for (int i = 0; i < row; i++) {
@@ -452,17 +451,7 @@ Data MinMax(Data num, Data low, Data high) {
 	return num;
 }
 
-int argMax(Matrix<Data> mat) {
-	Data m = 0;
-	int idx = -1;
-	for (int i = 0; i < mat.col; i++) {
-		if (mat.mat[0][0][i] > m) {
-			m = mat.mat[0][0][i];
-			idx = i;
-		}
-	}
-	return idx;
-}
+
 
 void Layer::LError(Matrix<Data> label) {
 	int row = matrix[matrix.size() - 1].row;
@@ -537,7 +526,11 @@ Weight::Weight(int method, int kernel[], int len) {
 //	this->updateTemp.clear();
 //}
 
-void FLayer::backPropagation(float learningRate, vector<Matrix<Data> > label) {
+FLayer::FLayer() {
+	index = 0;
+}
+
+void FLayer::backPropagation(vector<Matrix<Data> > label) {
 	if (prev == NULL) return;
 
 	// 레이어 안에서 연산된 크기
@@ -552,7 +545,7 @@ void FLayer::backPropagation(float learningRate, vector<Matrix<Data> > label) {
 						for (int ch = 0; ch < temp.channels; ch++) {
 							for (int r = 0; r < temp.row; r++) {
 								for (int c = 0; c < temp.col; c++) {
-									temp.mat[ch][r][c] = next->next->layers[i].backprop[next->next->layers[i].backprop.size()-1].mat[ch][r][c];
+									temp.mat[ch][r][c] = next->next->layers[i].backprop[next->next->layers[i].backprop.size() - 1].mat[ch][r][c];
 								}
 							}
 						}
@@ -561,12 +554,12 @@ void FLayer::backPropagation(float learningRate, vector<Matrix<Data> > label) {
 						for (int ch = 0; ch < temp.channels; ch++) {
 							for (int r = 0; r < temp.row; r++) {
 								for (int c = 0; c < temp.col; c++) {
-									temp.mat[ch][r][c] = next->next->layers[i].backprop[next->next->layers[i].backprop.size()-1].mat[ch][r][c] * next->matrix[0].mat[ch][r][c];
+									temp.mat[ch][r][c] = next->next->layers[i].backprop[next->next->layers[i].backprop.size() - 1].mat[ch][r][c] * next->matrix[0].mat[ch][r][c];
 								}
 							}
 						}
 					}
-					
+
 				}
 				layers[i].backprop.push_back(temp);
 			}
@@ -598,7 +591,7 @@ void FLayer::backPropagation(float learningRate, vector<Matrix<Data> > label) {
 					for (int r = 0; r < prev->row; r++) {
 						for (int c = 0; c < prev->col; c++) {
 							Data temp = 0;
-							for (int k = 0; k < prev->prev->layers[i].matrix[prev->prev->layers[i].matrix.size()-1].row; k++) {
+							for (int k = 0; k < prev->prev->layers[i].matrix[prev->prev->layers[i].matrix.size() - 1].row; k++) {
 								temp += prev->prev->layers[i].matrix[prev->prev->layers[i].matrix.size() - 1].mat[l][k][r] * layers[i].backprop[layers[i].backprop.size() - 1].mat[l][k][c];
 							}
 							prev->updateTemp[0].mat[l][r][c] += temp;
@@ -640,10 +633,10 @@ void FLayer::backPropagation(float learningRate, vector<Matrix<Data> > label) {
 					for (int r = 0; r < row; r++) {
 						for (int c = 0; c < col; c++) {
 							temp.mat[ch][r][c] = layers[i].backprop[layers[i].backprop.size() - 1].mat[l][m][n++];
-							if (n == col) {
+							if (n == layers[i].backprop[layers[i].backprop.size() - 1].col) {
 								n = 0;
 								m++;
-								if (m == row) {
+								if (m == layers[i].backprop[layers[i].backprop.size() - 1].row) {
 									m = 0;
 									l++;
 								}
@@ -708,11 +701,11 @@ void FLayer::backPropagation(float learningRate, vector<Matrix<Data> > label) {
 						for (int c = 0; c < temp.col; c++) {
 							Data temp2 = 0;
 
-							for (int nch = 0; prev->nextChannels; nch++) {
+							for (int nch = 0; nch < prev->nextChannels; nch++) {
 								for (int x = 0; x < prev->row; x++) {
 									for (int y = 0; y < prev->col; y++) {
 										if (isrange(r + midr - x, c + midc - y, temp.row, temp.col))
-											temp2 += prev->matrix[nch].mat[ch][x][y] * layers[i].backprop[layers[i].backprop.size() - 1].mat[nch][x + midr - r][y + midc - c];
+											temp2 += prev->matrix[nch].mat[ch][x][y] * layers[i].backprop[layers[i].backprop.size() - 1].mat[nch][r + midr - x][c + midc - y];
 									}
 								}
 							}
@@ -766,7 +759,35 @@ void FLayer::train(float learningRate) {
 		Matrix<Data> temp(-1, pointer->row, pointer->col, pointer->channels, -1);
 		pointer->updateTemp.push_back(temp);
 
-
+		if (pointer->prev == NULL) break;
 		pointer = pointer->prev->prev;
 	}
+}
+
+int argMax(Matrix<Data> mat) {
+	Data m = 0;
+	int idx = -1;
+	for (int i = 0; i < mat.col; i++) {
+		if (mat.mat[0][0][i] > m) {
+			m = mat.mat[0][0][i];
+			idx = i;
+		}
+	}
+
+	if (idx == -1) {
+		cout << "Error in argmax\n";
+		exit(1);
+	}
+	return idx;
+}
+
+float FLayer::accuracy(vector<Matrix<Data> > label) {
+	float ans = 0;
+	for (int i = index; i < index + batch_size; i++) {
+		if (argMax(layers[i].matrix[layers[i].matrix.size() - 1]) == argMax(label[i])) {
+			ans += 1;
+		}
+		//cout << argMax(layers[i].matrix[layers[i].matrix.size() - 1]) << ' ' << argMax(label[i]) << '\n';
+	}
+	return ans / (float)batch_size;
 }

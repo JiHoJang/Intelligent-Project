@@ -108,8 +108,11 @@ public:
 	Weight* prev = NULL;
 	Weight* next = NULL;
 
-	void backPropagation(float learningRate, vector<Matrix<Data> > label);
+	FLayer();
+
+	void backPropagation(vector<Matrix<Data> > label);
 	void train(float learningRate);
+	float accuracy(vector<Matrix<Data> > label);
 };
 
 class Weight {

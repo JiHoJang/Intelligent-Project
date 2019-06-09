@@ -14,8 +14,8 @@ int ReverseInt(int i)
 	ch4 = (i >> 24) & 255;
 	return((int)ch1 << 24) + ((int)ch2 << 16) + ((int)ch3 << 8) + ch4;
 }
-void ReadMNIST(int NumberOfImages, int DataOfAnImage, FLayer* arr, vector<Matrix<Data> >* label)
-{	
+void ReadMNIST(int NumberOfImages, int DataOfAnImage, FLayer * arr, vector<Matrix<Data> > * label)
+{
 	int n_rows = 0;
 	int n_cols = 0;
 	ifstream file("train-images.idx3-ubyte", ios::binary);
@@ -23,7 +23,7 @@ void ReadMNIST(int NumberOfImages, int DataOfAnImage, FLayer* arr, vector<Matrix
 	{
 		int magic_number = 0;
 		int number_of_images = 0;
-		
+
 		file.read((char*)& magic_number, sizeof(magic_number));
 		magic_number = ReverseInt(magic_number);
 		file.read((char*)& number_of_images, sizeof(number_of_images));
@@ -44,7 +44,7 @@ void ReadMNIST(int NumberOfImages, int DataOfAnImage, FLayer* arr, vector<Matrix
 				{
 					unsigned char temp = 0;
 					file.read((char*)& temp, sizeof(temp));
-					a.matrix[0].mat[0][r][c] = (Data)temp;
+					a.matrix[0].mat[0][r][c] = (Data)temp / 255;
 				}
 			}
 
@@ -61,7 +61,7 @@ void ReadMNIST(int NumberOfImages, int DataOfAnImage, FLayer* arr, vector<Matrix
 
 		if (magic_number != 2049) throw runtime_error("Invalid MNIST label file!");
 
-		
+
 
 		file2.read((char*)& number_of_labels, sizeof(number_of_labels)), number_of_labels = ReverseInt(number_of_labels);
 
@@ -91,7 +91,6 @@ int main() {
 
 	ReadMNIST(100, 784, &Input, &label);
 
-
 	int w1[] = { 5, 5, 1, 32 };
 	Weight W1(random, w1, 4);
 
@@ -111,15 +110,15 @@ int main() {
 	W2.next = &L2;
 	L2.prev = &W2;
 
-	int w3[] = {7 * 7 * 64, 512 };
+	int w3[] = { 7 * 7 * 64, 512 };
 	Weight W3(random, w3, 2); //for matmul
 	L2.next = &W3;
 	W3.prev = &L2;
-	
+
 	FLayer L3;
 	W3.next = &L3;
 	L3.prev = &W3;
-	
+
 	int w4[] = { 512, 10 };
 	Weight W4(random, w4, 2); // for matmul
 	L3.next = &W4;
@@ -139,8 +138,8 @@ int main() {
 	model.prev = &W5;
 
 	int batch_size = 32;
-	int i[3] = { 28, 28, 1 };
-	int ii[3] = { 14, 14, 1 };
+	int i[3] = { 28, 28, 32 };
+	int ii[3] = { 14, 14, 64 };
 	int i2[] = { 1, 512 };
 	int i3[] = { 1, 10 };
 
@@ -150,13 +149,21 @@ int main() {
 
 	int b_size = 32;
 
-	for (int t = 0; t < 100 / 32; t++) {
-		for (int batch = 0; batch < 32; batch++) {
+	for (int t = 0; t < 1000 / b_size; t++) {
+		for (int batch = 0; batch < b_size; batch++) {
 			Layer temp(conv, i, conv, 3);
 			temp.matrix.push_back(Input.layers[t + batch].conv2d(W1, strides1, true));
 			temp.ReLU();
 			temp.maxPool(ker2, ker2, true);
 			L1.layers.push_back(temp);
+
+			/*for (int i = 0; i < temp.row; i++) {
+				for (int j = 0; j < temp.col; j++) {
+					cout << temp.matrix[temp.matrix.size()-1].mat[0][i][j] << ' ';
+				}
+			}
+
+			cout << '\n' << '\n';*/
 
 			Layer temp2(conv, ii, conv, 3);
 			temp2.matrix.push_back(L1.layers[L1.layers.size() - 1].conv2d(W2, strides1, true));
@@ -164,6 +171,13 @@ int main() {
 			temp2.maxPool(ker2, ker2, true);
 			temp2.Reshape(rc);
 			L2.layers.push_back(temp2);
+
+			/*for (int i = 0; i < temp2.matrix[temp2.matrix.size()-1].row; i++) {
+				for (int j = 0; j < temp2.matrix[temp2.matrix.size() - 1].col; j++) {
+					cout << temp2.matrix[temp2.matrix.size() - 1].mat[0][i][j] << ' ';
+				}
+			}
+			cout << '\n' << '\n';*/
 
 			Layer temp3(matmul, i2, matmul, 2);
 			temp3.matrix.push_back(L2.layers[L2.layers.size() - 1].Matmul(W3));
@@ -179,17 +193,23 @@ int main() {
 			temp5.SoftMax();
 			model.layers.push_back(temp5);
 		}
-		FLayer* pointer = &model;
+		
+
+		FLayer * pointer = &model;
+		pointer->batch_size = b_size;
+		cout << t+1 << " : " << model.accuracy(label) << '\n';
 		while (true) {
-			pointer->backPropagation(0.01, label);
-			pointer->index += b_size;
 			pointer->batch_size = b_size;
+			pointer->backPropagation(label);
+			pointer->index += b_size;
+			
 
 			if (pointer->prev == NULL)
 				break;
 			pointer = pointer->prev->prev;
 		}
-		
+
+		model.train(0.01);
 	}
 
 	system("pause");
