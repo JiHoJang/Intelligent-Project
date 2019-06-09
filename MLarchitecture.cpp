@@ -21,9 +21,11 @@ M RanValue() {
 
 	//srand((unsigned int)time(0));
 
-	ans = rand() / (M)RAND_MAX + 0.01;
+	ans = rand() / (M)RAND_MAX - 0.5;
 
-	return ans;
+	ans *= 2;
+
+	return ans == 0 ? 0.01 : ans;
 }
 
 template<class M>
@@ -33,6 +35,10 @@ Matrix<M>::Matrix(int _method, int _row, int _col, int _channels, int _type) {
 	col = _col;
 	channels = _channels;
 	type = _type;
+	kernel[0] = 0;
+	kernel[1] = 0;
+	strides[0] = 0;
+	strides[1] = 0;
 
 	// random일 경우 난수로 초기화
 	if (method == random) {
@@ -46,7 +52,17 @@ Matrix<M>::Matrix(int _method, int _row, int _col, int _channels, int _type) {
 			}
 		}
 	}
-
+	else if (method == update) {
+		mat = new M * *[channels];
+		for (int j = 0; j < channels; j++) {
+			mat[j] = new M * [row];
+			for (int k = 0; k < row; k++) {
+				mat[j][k] = new M[col];
+				for (int l = 0; l < col; l++)
+					mat[j][k][l] = 1;
+			}
+		}
+	}
 	// random이 아닌 경우 매트릭스 구조만 생성
 	else {
 		mat = new M**[channels];
@@ -118,9 +134,8 @@ Data mp(Data** mat, int* idx,int r, int c, int maxr, int maxc, int kerrow, int k
 	for (int i = 0; i < kerrow; i++) {
 		for (int j = 0; j < kercol; j++) {
 			if (isrange(r + i, c + j, maxr, maxc) && ret < mat[r + i][c + j]) {
-				
 				ret = mat[r + i][c + j];
-				*idx = maxr * i + j;
+				*idx = maxc * (r+i) + c+j;
 			}
 		}
 	}
@@ -160,7 +175,7 @@ Layer::Layer(int method, int dimention[], int type, int len) {
 
 	// 콘볼루션의 결과 일때는 레이어를 생성한 뒤
 	// 벡터에만 넣어주고 콘볼루션의 리턴을 할당
-	if (method == conv || method == matmul) {
+	if (method == conv || method == matmul || method == add) {
 		//Matrix<Data> temp;
 		//matrix.push_back(temp);
 	}
@@ -168,13 +183,6 @@ Layer::Layer(int method, int dimention[], int type, int len) {
 		Matrix<Data> temp(method, row, col, channels, type);
 		matrix.push_back(temp);
 	}
-}
-
-Layer::~Layer() {
-	for (auto it = this->matrix.begin(); it != this->matrix.end(); it++) {
-		it->deleteMatrix();
-	}
-	this->matrix.clear();
 }
 
 
@@ -374,7 +382,7 @@ Matrix<Data> Layer::Matmul(Weight w) {
 }
 
 
-Matrix<Data> Layer::Matmul(Weight w) {
+Matrix<Data> Layer::Add(Weight w) {
 	Matrix<Data> temp = matrix[matrix.size() - 1];
 
 	if (w.nextChannels != 1) {
@@ -420,7 +428,7 @@ void Layer::SoftMax() {
 	for (int ch = 0; ch < channels; ch++) {
 		for (int i = 0; i < row; i++) {
 			for (int j = 0; j < col; j++) {
-				sum += matrix[matrix.size() - 1].mat[ch][i][j];
+				sum += (Data)exp(matrix[matrix.size() - 1].mat[ch][i][j]);
 			}
 		}
 	}
@@ -430,7 +438,7 @@ void Layer::SoftMax() {
 	for (int ch = 0; ch < channels; ch++) {
 		for (int i = 0; i < row; i++) {
 			for (int j = 0; j < col; j++) {
-				temp.mat[ch][i][j] = matrix[matrix.size() - 1].mat[ch][i][j] / sum;
+				temp.mat[ch][i][j] = (Data)(exp(matrix[matrix.size() - 1].mat[ch][i][j]) / sum);
 			}
 		}
 	}
@@ -444,7 +452,19 @@ Data MinMax(Data num, Data low, Data high) {
 	return num;
 }
 
-Data Layer::LError(Matrix<Data> label) {
+int argMax(Matrix<Data> mat) {
+	Data m = 0;
+	int idx = -1;
+	for (int i = 0; i < mat.col; i++) {
+		if (mat.mat[0][0][i] > m) {
+			m = mat.mat[0][0][i];
+			idx = i;
+		}
+	}
+	return idx;
+}
+
+void Layer::LError(Matrix<Data> label) {
 	int row = matrix[matrix.size() - 1].row;
 	int col = matrix[matrix.size() - 1].col;
 	int channels = matrix[matrix.size() - 1].channels;
@@ -456,17 +476,16 @@ Data Layer::LError(Matrix<Data> label) {
 
 	Data answer = 0;
 
-	//Matrix<Data> temp(-1, row, col, channels, -1);
+	Matrix<Data> ans(error, 1, 1, 1, error);
 	Matrix<Data> temp = matrix[matrix.size() - 1];
 
 	for (int ch = 0; ch < channels; ch++)
 		for (int r = 0; r < row; r++)
 			for (int c = 0; c < col; c++)
 				answer += label.mat[ch][r][c] * log(MinMax(temp.mat[ch][r][c], 0.0000000001, 1));
-	
-	return answer;
+	ans.mat[0][0][0] = answer;
+	matrix.push_back(ans);
 }
-
 
 Weight::Weight(int method, int kernel[], int len) {
 	dim = len;
@@ -502,12 +521,252 @@ Weight::Weight(int method, int kernel[], int len) {
 	for (int i = 0; i < nextChannels; i++) {
 		Matrix<Data> temp(method, row, col, channels, weight);
 		matrix.push_back(temp);
+		Matrix<Data> temp2(-1, row, col, channels, -1);
+		updateTemp.push_back(temp2);
 	}
 }
+//
+//Weight::~Weight() {
+//	auto it2 = this->updateTemp.begin();
+//	for (auto it = this->matrix.begin(); it != this->matrix.end(); it++) {
+//		it->deleteMatrix();
+//		it2->deleteMatrix();
+//		it2++;
+//	}
+//	this->matrix.clear();
+//	this->updateTemp.clear();
+//}
 
-Weight::~Weight() {
-	for (auto it = this->matrix.begin(); it != this->matrix.end(); it++) {
-		it->deleteMatrix();
+void FLayer::backPropagation(float learningRate, vector<Matrix<Data> > label) {
+	if (prev == NULL) return;
+
+	// 레이어 안에서 연산된 크기
+	int size = layers[0].matrix.size();
+	// 배치 사이즈 만큼 각 레이어에 대해
+	for (int i = index; i < index + batch_size; i++) {
+		for (int j = size - 1; j >= 0; j--) {
+			if (layers[i].backprop.size() == 0) {
+				Matrix<Data> temp(update, layers[i].matrix[j].row, layers[i].matrix[j].col, layers[i].matrix[j].channels, update);
+				if (next != NULL) {
+					if (next->next->layers[i].matrix[next->next->layers[i].matrix.size() - 1].type == add) {
+						for (int ch = 0; ch < temp.channels; ch++) {
+							for (int r = 0; r < temp.row; r++) {
+								for (int c = 0; c < temp.col; c++) {
+									temp.mat[ch][r][c] = next->next->layers[i].backprop[next->next->layers[i].backprop.size()-1].mat[ch][r][c];
+								}
+							}
+						}
+					}
+					else {
+						for (int ch = 0; ch < temp.channels; ch++) {
+							for (int r = 0; r < temp.row; r++) {
+								for (int c = 0; c < temp.col; c++) {
+									temp.mat[ch][r][c] = next->next->layers[i].backprop[next->next->layers[i].backprop.size()-1].mat[ch][r][c] * next->matrix[0].mat[ch][r][c];
+								}
+							}
+						}
+					}
+					
+				}
+				layers[i].backprop.push_back(temp);
+			}
+			int flag = layers[i].matrix[j].type;
+			// add
+			if (flag == add) {
+				for (int l = 0; l < prev->channels; l++) {
+					for (int r = 0; r < prev->row; r++) {
+						for (int c = 0; c < prev->col; c++) {
+							prev->updateTemp[0].mat[l][r][c] += layers[i].backprop[layers[i].backprop.size() - 1].mat[l][r][c];
+							//prev->updateTemp[k].mat[l][r][c] = prev->prev->layers[i].matrix[prev->prev->layers[i].matrix.size() - 1].mat[0][(k*l*r*c + l*r*c + r*c + c) / prev->prev->layers[i].matrix[prev->prev->layers[i].matrix.size() - 1].col][(k * l * r * c + l * r * c + r * c + c) % prev->prev->layers[i].matrix[prev->prev->layers[i].matrix.size() - 1].col] * layers[i].backprop[layers[i].backprop.size()-1].mat[l][r][c];
+						}
+					}
+				}
+			}
+			else if (flag == softmax) {
+				for (int l = 0; l < layers[i].matrix[j].channels; l++) {
+					for (int r = 0; r < layers[i].matrix[j].row; r++) {
+						for (int c = 0; c < layers[i].matrix[j].col; c++) {
+							layers[i].backprop[layers[i].backprop.size() - 1].mat[l][r][c] *= layers[i].matrix[j].mat[l][r][c] - label[i].mat[l][r][c];
+						}
+					}
+				}
+
+			}
+			// matmul 다시 하기
+			else if (flag == matmul) {
+				for (int l = 0; l < prev->channels; l++) {
+					for (int r = 0; r < prev->row; r++) {
+						for (int c = 0; c < prev->col; c++) {
+							Data temp = 0;
+							for (int k = 0; k < prev->prev->layers[i].matrix[prev->prev->layers[i].matrix.size()-1].row; k++) {
+								temp += prev->prev->layers[i].matrix[prev->prev->layers[i].matrix.size() - 1].mat[l][k][r] * layers[i].backprop[layers[i].backprop.size() - 1].mat[l][k][c];
+							}
+							prev->updateTemp[0].mat[l][r][c] += temp;
+						}
+					}
+				}
+				int channel = prev->prev->layers[i].matrix[prev->prev->layers[i].matrix.size() - 1].channels;
+				int row = prev->prev->layers[i].matrix[prev->prev->layers[i].matrix.size() - 1].row;
+				int col = prev->prev->layers[i].matrix[prev->prev->layers[i].matrix.size() - 1].col;
+
+				Matrix<Data> temp(update, row, col, channel, update);
+				for (int ch = 0; ch < channel; ch++) {
+					for (int r = 0; r < row; r++) {
+						for (int c = 0; c < col; c++) {
+							Data temp2 = 0;
+
+							for (int k = 0; k < prev->matrix[0].col; k++) {
+								temp2 += prev->matrix[0].mat[ch][c][k] * layers[i].backprop[layers[i].backprop.size() - 1].mat[ch][r][k];
+							}
+							temp.mat[ch][r][c] = temp2;
+						}
+					}
+				}
+				prev->prev->layers[i].backprop.push_back(temp);
+			}
+			else if (flag == reshape) {
+				// 다시 이전꺼로 바꿔주고
+				int channel = layers[i].matrix[j - 1].channels;
+				int row = layers[i].matrix[j - 1].row;
+				int col = layers[i].matrix[j - 1].col;
+
+				Matrix<Data> temp(update, row, col, channel, update);
+
+				int l = 0;
+				int m = 0;
+				int n = 0;
+
+				for (int ch = 0; ch < channel; ch++) {
+					for (int r = 0; r < row; r++) {
+						for (int c = 0; c < col; c++) {
+							temp.mat[ch][r][c] = layers[i].backprop[layers[i].backprop.size() - 1].mat[l][m][n++];
+							if (n == col) {
+								n = 0;
+								m++;
+								if (m == row) {
+									m = 0;
+									l++;
+								}
+							}
+						}
+					}
+				}
+
+				layers[i].backprop.push_back(temp);
+			}
+			else if (flag == maxPooling) {
+				int channel = layers[i].matrix[j - 1].channels;
+				int row = layers[i].matrix[j - 1].row;
+				int col = layers[i].matrix[j - 1].col;
+				Matrix<Data> temp(-1, row, col, channel, -1);
+
+				Matrix<int> idx = layers[i].poolingidx;
+
+				for (int ch = 0; ch < channel; ch++) {
+					for (int r = 0; r < layers[i].matrix[j].row; r++) {
+						for (int c = 0; c < layers[i].matrix[j].col; c++) {
+							temp.mat[ch][idx.mat[ch][r][c] / col][idx.mat[ch][r][c] % col] = layers[i].backprop[layers[i].backprop.size() - 1].mat[ch][r][c];
+						}
+					}
+				}
+
+				layers[i].backprop.push_back(temp);
+			}
+
+			else if (flag == conv) {
+				//ㅅㅂ...
+				prev->updateTemp.clear();
+				int midr = prev->row / 2;
+				int midc = prev->col / 2;
+
+				for (int nch = 0; nch < prev->nextChannels; nch++) {
+					Matrix<Data> temp(-1, prev->row, prev->col, prev->channels, -1);
+					for (int ch = 0; ch < prev->channels; ch++) {
+						for (int r = 0; r < prev->row; r++) {
+							for (int c = 0; c < prev->col; c++) {
+								Data temp2 = 0;
+
+								for (int y = 0; y < prev->prev->layers[i].matrix[prev->prev->layers[i].matrix.size() - 1].row; y++) {
+									for (int z = 0; z < prev->prev->layers[i].matrix[prev->prev->layers[i].matrix.size() - 1].col; z++) {
+										if (isrange(y + midr - r, z + midc - c, prev->prev->layers[i].matrix[prev->prev->layers[i].matrix.size() - 1].row, prev->prev->layers[i].matrix[prev->prev->layers[i].matrix.size() - 1].col)) {
+											temp2 += layers[i].backprop[layers[i].backprop.size() - 1].mat[nch][y + midr - r][z + midc - c] * prev->prev->layers[i].matrix[prev->prev->layers[i].matrix.size() - 1].mat[ch][y][z];
+										}
+									}
+								}
+
+								temp.mat[ch][r][c] = temp2;
+							}
+						}
+					}
+					prev->updateTemp.push_back(temp);
+				}
+
+				Matrix<Data> temp(-1, prev->prev->layers[i].matrix[prev->prev->layers[i].matrix.size() - 1].row, prev->prev->layers[i].matrix[prev->prev->layers[i].matrix.size() - 1].col, prev->prev->layers[i].matrix[prev->prev->layers[i].matrix.size() - 1].channels, -1);
+
+				for (int ch = 0; ch < temp.channels; ch++) {
+					for (int r = 0; r < temp.row; r++) {
+						for (int c = 0; c < temp.col; c++) {
+							Data temp2 = 0;
+
+							for (int nch = 0; prev->nextChannels; nch++) {
+								for (int x = 0; x < prev->row; x++) {
+									for (int y = 0; y < prev->col; y++) {
+										if (isrange(r + midr - x, c + midc - y, temp.row, temp.col))
+											temp2 += prev->matrix[nch].mat[ch][x][y] * layers[i].backprop[layers[i].backprop.size() - 1].mat[nch][x + midr - r][y + midc - c];
+									}
+								}
+							}
+
+							temp.mat[ch][r][c];
+						}
+					}
+				}
+
+				prev->prev->layers[i].backprop.push_back(temp);
+
+			}
+			else if (flag == sigmoid) {
+				for (int l = 0; l < layers[i].matrix[j].channels; l++) {
+					for (int r = 0; r < layers[i].matrix[j].row; r++) {
+						for (int c = 0; c < layers[i].matrix[j].col; c++) {
+							layers[i].backprop[layers[i].backprop.size() - 1].mat[l][r][c] *= layers[i].matrix[j].mat[l][r][c] * (1 - layers[i].matrix[j].mat[l][r][c]);
+						}
+					}
+				}
+			}
+			else if (flag == relu) {
+				for (int l = 0; l < layers[i].matrix[j].channels; l++) {
+					for (int r = 0; r < layers[i].matrix[j].row; r++) {
+						for (int c = 0; c < layers[i].matrix[j].col; c++) {
+							if (layers[i].matrix[j].mat[l][r][c] <= 0)
+								layers[i].backprop[layers[i].backprop.size() - 1].mat[l][r][c] = 0;
+						}
+					}
+				}
+			}
+		}
 	}
-	this->matrix.clear();
+	//train(learningRate);
+}
+
+void FLayer::train(float learningRate) {
+	Weight* pointer = prev;
+	while (pointer != NULL) {
+		for (int nch = 0; nch < pointer->nextChannels; nch++) {
+			for (int ch = 0; ch < pointer->channels; ch++) {
+				for (int r = 0; r < pointer->row; r++) {
+					for (int c = 0; c < pointer->col; c++) {
+						pointer->matrix[nch].mat[ch][r][c] -= pointer->updateTemp[nch].mat[ch][r][c] * learningRate;
+					}
+				}
+			}
+		}
+
+		pointer->updateTemp.clear();
+		Matrix<Data> temp(-1, pointer->row, pointer->col, pointer->channels, -1);
+		pointer->updateTemp.push_back(temp);
+
+
+		pointer = pointer->prev->prev;
+	}
 }

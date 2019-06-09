@@ -5,10 +5,6 @@
 using namespace std;
 
 enum datatype {
-	int32,
-	int64,
-	float32,
-	float64,
 	read,
 	random,
 	result,
@@ -22,7 +18,9 @@ enum datatype {
 	reshape,
 	matmul,
 	softmax,
-	add
+	add,
+	update,
+	error
 };
 
 typedef float Data;
@@ -65,20 +63,17 @@ void printmat(Matrix<M> mat);
 class Layer {
 public:
 	vector<Matrix<Data> > matrix; // for calculate functions
+	vector<Matrix<Data> > backprop;
 	int row, col, channels;
 	int dim;
 	int strides[2] = { 0 };
 	Matrix<int> poolingidx;
 
-	// 레이어의 앞 혹은 뒤의 weight와 연결
-	Weight* prev = NULL;
-	Weight* next = NULL;
 
 	Layer();
 
+	// backprop는 생성하지 않음
 	Layer(int method, int dimention[], int type, int len);
-
-	~Layer();
 
 	Matrix<Data> conv2d(Weight w, int stride[2], bool padding);
 
@@ -96,18 +91,37 @@ public:
 
 	void SoftMax();
 
-	Data LError(Matrix<Data> result);
+	void LError(Matrix<Data> result);
+};
+
+int argMax(Matrix<Data> mat);
+
+class FLayer {
+public:
+	vector<Layer> layers;
+
+	int index = 0;
+	int batch_size;
+	double prop = 1;
+
+	// 레이어의 앞 혹은 뒤의 weight와 연결
+	Weight* prev = NULL;
+	Weight* next = NULL;
+
+	void backPropagation(float learningRate, vector<Matrix<Data> > label);
+	void train(float learningRate);
 };
 
 class Weight {
 public:
 	vector< Matrix<Data> > matrix; // for next channels
+	vector<Matrix<Data> > updateTemp;
 	int row, col, channels;
 	int nextChannels;
 	int dim;
 
-	Layer* prev = NULL;
-	Layer* next = NULL;
+	FLayer* prev = NULL;
+	FLayer* next = NULL;
 
 	Weight() {
 		row = 0;
@@ -118,7 +132,7 @@ public:
 
 	Weight(int method, int kernel[], int len);
 
-	~Weight();
+	//~Weight();
 };
 
 #endif
